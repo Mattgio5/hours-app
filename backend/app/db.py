@@ -14,14 +14,12 @@ class Base(DeclarativeBase):
 
 
 def _engine():
+    import re
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set.")
-    # Force psycopg2 dialect so SQLAlchemy 2.x doesn't try psycopg3
-    for prefix in ("postgres://", "postgresql://"):
-        if url.startswith(prefix):
-            url = "postgresql+psycopg2://" + url[len(prefix):]
-            break
+    # Normalize to psycopg3 dialect (psycopg[binary]) — SQLAlchemy 2.x default on Python 3.14
+    url = re.sub(r"^postgres(?:ql)?(?:\+\w+)?://", "postgresql+psycopg://", url)
     return create_engine(url, pool_pre_ping=True, future=True)
 
 

@@ -1,12 +1,12 @@
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
 from alembic import context
-import os, sys
+import os, re, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.db import Base, engine
+from app.db import Base
 import app.models
 
 config = context.config
@@ -16,14 +16,19 @@ if config.config_file_name:
 target_metadata = Base.metadata
 
 
+def _url():
+    raw = os.environ.get("DATABASE_URL", "")
+    return re.sub(r"^postgres(?:ql)?(?:\+\w+)?://", "postgresql+psycopg://", raw)
+
+
 def run_migrations_offline():
-    url = os.environ["DATABASE_URL"].replace("postgres://", "postgresql://", 1)
-    context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
+    context.configure(url=_url(), target_metadata=target_metadata, literal_binds=True)
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online():
+    engine = create_engine(_url(), poolclass=pool.NullPool)
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
