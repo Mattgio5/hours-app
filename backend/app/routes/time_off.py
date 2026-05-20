@@ -47,8 +47,8 @@ def _create_single_task(req: TimeOffRequest, jobber_user_id: str, for_date: date
             "title": _build_task_title(req, for_date),
             "assignedTo": [jobber_user_id],
             "allDay": True,
-            "startAt": date_str + "T00:00:00Z",
-            "endAt": date_str + "T23:59:59Z",
+            "startAt": date_str + "T12:00:00Z",
+            "endAt": date_str + "T12:00:00Z",
             "instructions": req.notes or "",
         }})
         task = result.get("data", {}).get("taskCreate", {})
