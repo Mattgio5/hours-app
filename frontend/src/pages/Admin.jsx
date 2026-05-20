@@ -53,9 +53,16 @@ function Login({ onLogin }) {
 
 // ── Requests tab ─────────────────────────────────────────────────────────────
 
+function formatDate(str) {
+  if (!str) return "";
+  const d = new Date(str);
+  return isNaN(d) ? str : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
 function RequestsTab() {
   const [requests, setRequests] = useState([]);
   const [filter, setFilter] = useState("pending");
+  const [dateFilter, setDateFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionNote, setActionNote] = useState({});
   const [busy, setBusy] = useState({});
@@ -63,10 +70,10 @@ function RequestsTab() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getTimeOffRequests(filter || undefined)
+    api.getTimeOffRequests({ status: filter || undefined, date: dateFilter || undefined })
       .then(setRequests)
       .finally(() => setLoading(false));
-  }, [filter]);
+  }, [filter, dateFilter]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -86,7 +93,7 @@ function RequestsTab() {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
         {["pending", "approved", "denied", ""].map((s) => (
           <button
             key={s}
@@ -96,6 +103,18 @@ function RequestsTab() {
             {s === "" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
           </button>
         ))}
+        <input
+          type="date"
+          value={dateFilter}
+          onChange={(e) => setDateFilter(e.target.value)}
+          title="Filter by specific date"
+          style={{ marginBottom: 0, padding: "6px 10px", fontSize: ".85rem", width: "auto" }}
+        />
+        {dateFilter && (
+          <button className="btn btn-secondary" style={{ padding: "6px 10px", fontSize: ".85rem" }} onClick={() => setDateFilter("")}>
+            Clear date
+          </button>
+        )}
       </div>
 
       {msg && <div className="error-box" style={{ marginBottom: 12 }}>{msg}</div>}
@@ -121,7 +140,12 @@ function RequestsTab() {
             </div>
             {r.notes && <p className="request-meta" style={{ marginTop: 4 }}>"{r.notes}"</p>}
             {r.admin_note && <p className="request-meta">Admin note: {r.admin_note}</p>}
-            {r.jobber_task_id && <p className="request-meta" style={{ color: "#16a34a" }}>✓ Jobber task created</p>}
+            {r.jobber_task_id && (
+              <p className="request-meta" style={{ color: "#16a34a" }}>
+                ✓ {r.jobber_task_id.includes("task") ? r.jobber_task_id : "Jobber task"} created
+              </p>
+            )}
+            <p className="request-meta" style={{ color: "#9ca3af", marginTop: 4 }}>Submitted {formatDate(r.created_at)}</p>
 
             {r.status === "pending" && (
               <div style={{ marginTop: 10 }}>
@@ -445,6 +469,9 @@ const API_BASE = import.meta.env.VITE_API_URL || "";
 function JobberTab() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [testMsg, setTestMsg] = useState("");
+  const [testEmail, setTestEmail] = useState("");
+  const [testBusy, setTestBusy] = useState(false);
 
   useEffect(() => {
     api.getJobberStatus()
@@ -457,26 +484,64 @@ function JobberTab() {
     window.location.href = `${API_BASE}/auth/jobber?token=${token}`;
   }
 
-  const label = loading ? "Checking…"
+  async function sendTest(e) {
+    e.preventDefault();
+    setTestMsg("");
+    setTestBusy(true);
+    try {
+      const res = await api.testEmail(testEmail || undefined);
+      setTestMsg(res.message || "Sent!");
+    } catch (err) {
+      setTestMsg(`Failed: ${err.message}`);
+    } finally {
+      setTestBusy(false);
+    }
+  }
+
+  const jobberLabel = loading ? "Checking…"
     : status?.status === "connected" ? "Connected"
     : status?.status === "expired" ? "Token expired"
     : "Not connected";
-
-  const color = loading ? "#6b7280"
+  const jobberColor = loading ? "#6b7280"
     : status?.status === "connected" ? "#16a34a"
     : "#dc2626";
 
   return (
-    <div className="card">
-      <h2>Jobber Connection</h2>
-      <p style={{ color, fontWeight: 600, marginBottom: 16 }}>{label}</p>
-      <p style={{ color: "#6b7280", fontSize: ".9rem", marginBottom: 20 }}>
-        Jobber authorization is required to create tasks when time-off requests are approved.
-        Re-authorize any time the status shows expired.
-      </p>
-      <button className="btn btn-primary" onClick={connect}>
-        {status?.status === "connected" ? "Re-authorize Jobber" : "Connect Jobber"}
-      </button>
+    <div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h2>Jobber Connection</h2>
+        <p style={{ color: jobberColor, fontWeight: 600, marginBottom: 16 }}>{jobberLabel}</p>
+        <p style={{ color: "#6b7280", fontSize: ".9rem", marginBottom: 20 }}>
+          Required to create tasks when time-off is approved. Re-authorize if expired.
+        </p>
+        <button className="btn btn-primary" onClick={connect}>
+          {status?.status === "connected" ? "Re-authorize Jobber" : "Connect Jobber"}
+        </button>
+      </div>
+
+      <div className="card">
+        <h2>Test Email</h2>
+        <p style={{ color: "#6b7280", fontSize: ".9rem", marginBottom: 16 }}>
+          Send a test email to verify RESEND_API_KEY, EMAIL_FROM, and ADMIN_EMAIL are configured correctly.
+        </p>
+        {testMsg && (
+          <div className={testMsg.startsWith("Failed") ? "error-box" : "success-box"} style={{ marginBottom: 12, padding: "10px 14px" }}>
+            {testMsg}
+          </div>
+        )}
+        <form onSubmit={sendTest}>
+          <label>Send to (leave blank to use ADMIN_EMAIL)</label>
+          <input
+            type="email"
+            placeholder="override@example.com"
+            value={testEmail}
+            onChange={(e) => setTestEmail(e.target.value)}
+          />
+          <button className="btn btn-secondary" type="submit" disabled={testBusy}>
+            {testBusy ? "Sending…" : "Send Test Email"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

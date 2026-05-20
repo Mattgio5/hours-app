@@ -32,8 +32,13 @@ export const api = {
   submitTimeOff: (body) => req("POST", "/api/time-off-requests", body),
 
   adminLogin: (password) => req("POST", "/api/admin/login", { password }),
-  getTimeOffRequests: (status) =>
-    adminReq("GET", `/api/time-off-requests${status ? `?status=${status}` : ""}`),
+  getTimeOffRequests: ({ status, date } = {}) => {
+    const p = new URLSearchParams();
+    if (status) p.set("status", status);
+    if (date) p.set("date", date);
+    const qs = p.toString();
+    return adminReq("GET", `/api/time-off-requests${qs ? `?${qs}` : ""}`);
+  },
   approveRequest: (id, admin_note) =>
     adminReq("POST", `/api/time-off-requests/${id}/approve`, { admin_note }),
   denyRequest: (id, admin_note) =>
@@ -44,6 +49,7 @@ export const api = {
   },
   updateTimeEntry: (id, body) => adminReq("PUT", `/api/time-entries/${id}`, body),
   deleteTimeEntry: (id) => adminReq("DELETE", `/api/time-entries/${id}`),
+  testEmail: (to) => adminReq("POST", "/api/admin/test-email", { to }),
   getJobberStatus: () => adminReq("GET", "/api/admin/jobber-status"),
   getWorkersFull: () => adminReq("GET", "/api/workers"),
   createWorker: (body) => adminReq("POST", "/api/workers", body),

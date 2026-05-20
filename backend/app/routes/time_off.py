@@ -1,9 +1,11 @@
 from __future__ import annotations
 import logging
+from datetime import date as date_type, timedelta
 from flask import Blueprint, jsonify, request
+from sqlalchemy import or_, and_
 from app.db import SessionLocal
 from app.models import TimeOffRequest, Worker
-from app.email_service import send_time_off_notification
+from app.email_service import send_time_off_notification, send_test_email
 from app.jobber_gql import jobber_gql
 from .auth import require_admin
 
@@ -27,12 +29,9 @@ _TYPE_LABELS = {
 }
 
 
-def _build_task_title(req: TimeOffRequest) -> str:
+def _build_task_title(req: TimeOffRequest, for_date: date_type | None = None) -> str:
     label = _TYPE_LABELS.get(req.request_type, "TIME OFF")
-    if req.request_date_to and req.request_date_to != req.request_date:
-        date_str = f"{req.request_date} – {req.request_date_to}"
-    else:
-        date_str = str(req.request_date)
+    date_str = str(for_date) if for_date else str(req.request_date)
     title = f"{label} – {req.worker_name} – {date_str}"
     if req.request_type == "late_arrival" and req.time_from:
         title += f" (not in until {req.time_from})"
@@ -41,27 +40,53 @@ def _build_task_title(req: TimeOffRequest) -> str:
     return title
 
 
-def _create_jobber_task(req: TimeOffRequest, jobber_user_id: str) -> str | None:
-    date_str = str(req.request_date)
+def _create_single_task(req: TimeOffRequest, jobber_user_id: str, for_date: date_type) -> str | None:
+    date_str = str(for_date)
     try:
-        end_date = str(req.request_date_to) if req.request_date_to else date_str
         result = jobber_gql(_TASK_MUTATION, {"input": {
-            "title": _build_task_title(req),
+            "title": _build_task_title(req, for_date),
             "assignedTo": [jobber_user_id],
             "allDay": True,
             "startAt": date_str + "T00:00:00Z",
-            "endAt": end_date + "T23:59:59Z",
+            "endAt": date_str + "T23:59:59Z",
             "instructions": req.notes or "",
         }})
         task = result.get("data", {}).get("taskCreate", {})
         errors = task.get("userErrors") or []
         if errors:
-            log.warning("Jobber task errors for request %d: %s", req.id, errors)
+            log.warning("Jobber task errors for request %d on %s: %s", req.id, date_str, errors)
             return None
         return (task.get("task") or {}).get("id")
     except Exception as exc:
-        log.exception("Failed to create Jobber task for request %d: %s", req.id, exc)
+        log.exception("Failed to create Jobber task for request %d on %s: %s", req.id, date_str, exc)
         return None
+
+
+def _create_jobber_tasks(req: TimeOffRequest, jobber_user_id: str) -> str | None:
+    """Create one task per day in the request range. Returns a summary string."""
+    start = req.request_date
+    end = req.request_date_to if req.request_date_to else start
+
+    dates = []
+    d = start
+    while d <= end:
+        dates.append(d)
+        d += timedelta(days=1)
+
+    first_id = None
+    created = 0
+    for d in dates:
+        task_id = _create_single_task(req, jobber_user_id, d)
+        if task_id:
+            created += 1
+            if first_id is None:
+                first_id = task_id
+
+    if created == 0:
+        return None
+    if created == 1:
+        return first_id
+    return f"{created} tasks"
 
 
 @time_off_bp.post("/api/time-off-requests")
@@ -109,16 +134,22 @@ def submit_request():
 @require_admin
 def list_requests():
     status = request.args.get("status")
+    date_filter = request.args.get("date")
+
     with SessionLocal() as s:
         q = s.query(TimeOffRequest)
         if status:
             q = q.filter_by(status=status)
-        rows = q.order_by(
-            TimeOffRequest.status == "pending",  # pending first (False < True in SQL but we want True first)
-            TimeOffRequest.request_date.desc(),
-            TimeOffRequest.created_at.desc(),
-        ).all()
-        # re-sort in Python: pending first
+        if date_filter:
+            # Include single-day requests matching the date, and range requests that span it
+            q = q.filter(or_(
+                and_(TimeOffRequest.request_date_to == None,
+                     TimeOffRequest.request_date == date_filter),
+                and_(TimeOffRequest.request_date_to != None,
+                     TimeOffRequest.request_date <= date_filter,
+                     TimeOffRequest.request_date_to >= date_filter),
+            ))
+        rows = q.all()
         rows = sorted(rows, key=lambda r: (0 if r.status == "pending" else 1, r.request_date))
         return jsonify([_serialize(r) for r in rows])
 
@@ -141,9 +172,9 @@ def approve_request(rid):
         jobber_task_id = None
         jobber_warning = None
         if worker and worker.jobber_user_id:
-            jobber_task_id = _create_jobber_task(req, worker.jobber_user_id)
+            jobber_task_id = _create_jobber_tasks(req, worker.jobber_user_id)
             if not jobber_task_id:
-                jobber_warning = "Approved, but Jobber task could not be created."
+                jobber_warning = "Approved, but Jobber task(s) could not be created."
         else:
             jobber_warning = "Approved. Worker has no Jobber user ID — task not created."
 
@@ -170,6 +201,19 @@ def deny_request(rid):
         req.admin_note = body.get("admin_note") or None
         s.commit()
         return jsonify(_serialize(req))
+
+
+@time_off_bp.post("/api/admin/test-email")
+@require_admin
+def test_email():
+    body = request.get_json(silent=True) or {}
+    to = body.get("to") or __import__("os").environ.get("ADMIN_EMAIL", "")
+    if not to:
+        return jsonify({"error": "No recipient — pass {\"to\": \"email\"} or set ADMIN_EMAIL"}), 400
+    ok, msg = send_test_email(to)
+    if ok:
+        return jsonify({"ok": True, "message": f"Test email sent to {to}"})
+    return jsonify({"ok": False, "error": msg}), 500
 
 
 def _serialize(r: TimeOffRequest) -> dict:

@@ -5,11 +5,6 @@ import requests
 
 log = logging.getLogger(__name__)
 
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-FROM_EMAIL = os.environ.get("EMAIL_FROM", "noreply@yourdomain.com")
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
-APP_URL = os.environ.get("APP_URL", "http://localhost:5173")
-
 _TYPE_LABELS = {
     "full_day": "Full Day Off",
     "late_arrival": "Late Arrival",
@@ -17,9 +12,43 @@ _TYPE_LABELS = {
 }
 
 
+def _cfg():
+    return {
+        "api_key": os.environ.get("RESEND_API_KEY", ""),
+        "from_email": os.environ.get("EMAIL_FROM", ""),
+        "admin_email": os.environ.get("ADMIN_EMAIL", ""),
+        "app_url": os.environ.get("FRONTEND_URL", "http://localhost:5173"),
+    }
+
+
+def _send(cfg: dict, to: str, subject: str, html: str) -> tuple[bool, str]:
+    if not cfg["api_key"]:
+        return False, "RESEND_API_KEY not set"
+    if not cfg["from_email"]:
+        return False, "EMAIL_FROM not set"
+    if not to:
+        return False, "Recipient address is empty"
+    try:
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {cfg['api_key']}", "Content-Type": "application/json"},
+            json={"from": cfg["from_email"], "to": [to], "subject": subject, "html": html},
+            timeout=15,
+        )
+        if resp.status_code >= 400:
+            msg = f"Resend error {resp.status_code}: {resp.text}"
+            log.error(msg)
+            return False, msg
+        return True, "ok"
+    except Exception as exc:
+        log.exception("Failed to send email: %s", exc)
+        return False, str(exc)
+
+
 def send_time_off_notification(req: dict) -> bool:
-    if not RESEND_API_KEY or not ADMIN_EMAIL:
-        log.warning("Email not configured (RESEND_API_KEY or ADMIN_EMAIL missing)")
+    cfg = _cfg()
+    if not cfg["admin_email"]:
+        log.warning("ADMIN_EMAIL not set — skipping notification")
         return False
 
     rtype = _TYPE_LABELS.get(req["request_type"], req["request_type"])
@@ -46,29 +75,21 @@ def send_time_off_notification(req: dict) -> bool:
       {notes_html}
     </p>
     <p>
-      <a href="{APP_URL}/admin" style="
+      <a href="{cfg['app_url']}/admin" style="
         background:#2563eb;color:#fff;padding:10px 20px;
         border-radius:6px;text-decoration:none;display:inline-block;margin-top:8px
       ">Review in Admin Dashboard</a>
     </p>
     """
 
-    try:
-        resp = requests.post(
-            "https://api.resend.com/emails",
-            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-            json={
-                "from": FROM_EMAIL,
-                "to": [ADMIN_EMAIL],
-                "subject": f"Time Off Request – {worker} – {date_str}",
-                "html": html,
-            },
-            timeout=15,
-        )
-        if resp.status_code >= 400:
-            log.error("Resend error %s: %s", resp.status_code, resp.text)
-            return False
-        return True
-    except Exception as exc:
-        log.exception("Failed to send email: %s", exc)
-        return False
+    ok, err = _send(cfg, cfg["admin_email"],
+                    f"Time Off Request – {worker} – {date_str}", html)
+    if not ok:
+        log.error("Notification failed: %s", err)
+    return ok
+
+
+def send_test_email(to: str) -> tuple[bool, str]:
+    cfg = _cfg()
+    return _send(cfg, to, "Hours App — test email",
+                 "<p>If you received this, email is configured correctly.</p>")
