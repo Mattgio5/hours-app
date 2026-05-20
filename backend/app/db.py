@@ -17,14 +17,12 @@ def _engine():
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise RuntimeError("DATABASE_URL is not set.")
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
-    return create_engine(
-        url,
-        pool_pre_ping=True,
-        future=True,
-        connect_args={"prepare_threshold": None},
-    )
+    # Force psycopg2 dialect so SQLAlchemy 2.x doesn't try psycopg3
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            url = "postgresql+psycopg2://" + url[len(prefix):]
+            break
+    return create_engine(url, pool_pre_ping=True, future=True)
 
 
 engine = _engine()
