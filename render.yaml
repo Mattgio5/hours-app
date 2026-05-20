@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: hours-app-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: python -m alembic upgrade head
+    startCommand: gunicorn --timeout 120 --workers 2 "app.routes.app:app"
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: APP_URL        # backend public URL (used in email links)
+        sync: false
+      - key: FRONTEND_URL   # frontend URL (for CORS allow-list)
+        sync: false
+      - key: JOBBER_CLIENT_ID
+        sync: false
+      - key: JOBBER_CLIENT_SECRET
+        sync: false
+
+  - type: web
+    name: hours-app
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL   # set to the hours-app-api service URL
+        sync: false

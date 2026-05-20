@@ -350,6 +350,49 @@ function HoursTab() {
   );
 }
 
+// ── Jobber tab ────────────────────────────────────────────────────────────────
+
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+function JobberTab() {
+  const [status, setStatus] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getJobberStatus()
+      .then(setStatus)
+      .finally(() => setLoading(false));
+  }, []);
+
+  function connect() {
+    const token = localStorage.getItem("admin_token") || "";
+    window.location.href = `${API_BASE}/auth/jobber?token=${token}`;
+  }
+
+  const label = loading ? "Checking…"
+    : status?.status === "connected" ? "Connected"
+    : status?.status === "expired" ? "Token expired"
+    : "Not connected";
+
+  const color = loading ? "#6b7280"
+    : status?.status === "connected" ? "#16a34a"
+    : "#dc2626";
+
+  return (
+    <div className="card">
+      <h2>Jobber Connection</h2>
+      <p style={{ color, fontWeight: 600, marginBottom: 16 }}>{label}</p>
+      <p style={{ color: "#6b7280", fontSize: ".9rem", marginBottom: 20 }}>
+        Jobber authorization is required to create tasks when time-off requests are approved.
+        Re-authorize any time the status shows expired.
+      </p>
+      <button className="btn btn-primary" onClick={connect}>
+        {status?.status === "connected" ? "Re-authorize Jobber" : "Connect Jobber"}
+      </button>
+    </div>
+  );
+}
+
 // ── Main admin shell ──────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -372,7 +415,7 @@ export default function Admin() {
       </div>
 
       <div className="tabs">
-        {["requests", "workers", "hours"].map((t) => (
+        {["requests", "workers", "hours", "jobber"].map((t) => (
           <button key={t} className={`tab${tab === t ? " active" : ""}`} onClick={() => setTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -382,6 +425,7 @@ export default function Admin() {
       {tab === "requests" && <RequestsTab />}
       {tab === "workers" && <WorkersTab />}
       {tab === "hours" && <HoursTab />}
+      {tab === "jobber" && <JobberTab />}
     </div>
   );
 }

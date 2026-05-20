@@ -42,6 +42,7 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return adminReq("GET", `/api/time-entries${qs ? `?${qs}` : ""}`);
   },
+  getJobberStatus: () => adminReq("GET", "/api/admin/jobber-status"),
   getWorkersFull: () => adminReq("GET", "/api/workers"),
   createWorker: (body) => adminReq("POST", "/api/workers", body),
   updateWorker: (id, body) => adminReq("PUT", `/api/workers/${id}`, body),
