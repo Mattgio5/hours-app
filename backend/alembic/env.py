@@ -21,8 +21,16 @@ def _url():
     return re.sub(r"^postgres(?:ql)?(?:\+\w+)?://", "postgresql+psycopg://", raw)
 
 
+VERSION_TABLE = "hours_alembic_version"
+
+
 def run_migrations_offline():
-    context.configure(url=_url(), target_metadata=target_metadata, literal_binds=True)
+    context.configure(
+        url=_url(),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        version_table=VERSION_TABLE,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -30,7 +38,11 @@ def run_migrations_offline():
 def run_migrations_online():
     engine = create_engine(_url(), poolclass=pool.NullPool)
     with engine.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            version_table=VERSION_TABLE,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
