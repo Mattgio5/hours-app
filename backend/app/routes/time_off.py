@@ -209,6 +209,20 @@ def delete_request(rid):
         return jsonify({"ok": True})
 
 
+@time_off_bp.post("/api/time-off-requests/<int:rid>/reset")
+@require_admin
+def reset_request(rid):
+    with SessionLocal() as s:
+        req = s.query(TimeOffRequest).filter_by(id=rid).first()
+        if not req:
+            return jsonify({"error": "not found"}), 404
+        req.status = "pending"
+        req.jobber_task_id = None
+        req.admin_note = None
+        s.commit()
+        return jsonify(_serialize(req))
+
+
 @time_off_bp.post("/api/time-off-requests/<int:rid>/deny")
 @require_admin
 def deny_request(rid):

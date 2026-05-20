@@ -51,6 +51,7 @@ export const api = {
   updateTimeEntry: (id, body) => adminReq("PUT", `/api/time-entries/${id}`, body),
   deleteTimeEntry: (id) => adminReq("DELETE", `/api/time-entries/${id}`),
   deleteTimeOffRequest: (id) => adminReq("DELETE", `/api/time-off-requests/${id}`),
+  resetTimeOffRequest: (id) => adminReq("POST", `/api/time-off-requests/${id}/reset`),
   testEmail: (to) => adminReq("POST", "/api/admin/test-email", { to }),
   getJobberStatus: () => adminReq("GET", "/api/admin/jobber-status"),
   getWorkersFull: () => adminReq("GET", "/api/workers"),

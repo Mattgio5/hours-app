@@ -160,17 +160,32 @@ function RequestsTab() {
             <p className="request-meta" style={{ color: "#9ca3af", marginTop: 4 }}>Submitted {formatDate(r.created_at)}</p>
 
             {r.status !== "pending" && (
-              <button
-                className="btn btn-danger"
-                style={{ marginTop: 8, padding: "4px 12px", fontSize: ".8rem" }}
-                onClick={async () => {
-                  if (!confirm("Delete this request?")) return;
-                  try { await api.deleteTimeOffRequest(r.id); load(); }
-                  catch (err) { setMsg(err.message); }
-                }}
-              >
-                Delete
-              </button>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "4px 12px", fontSize: ".8rem" }}
+                  disabled={busy[r.id]}
+                  onClick={async () => {
+                    setBusy((b) => ({ ...b, [r.id]: true }));
+                    try { await api.resetTimeOffRequest(r.id); load(); }
+                    catch (err) { setMsg(err.message); }
+                    finally { setBusy((b) => ({ ...b, [r.id]: false })); }
+                  }}
+                >
+                  Reset to Pending
+                </button>
+                <button
+                  className="btn btn-danger"
+                  style={{ padding: "4px 12px", fontSize: ".8rem" }}
+                  onClick={async () => {
+                    if (!confirm("Delete this request?")) return;
+                    try { await api.deleteTimeOffRequest(r.id); load(); }
+                    catch (err) { setMsg(err.message); }
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
             )}
 
             {r.status === "pending" && (
