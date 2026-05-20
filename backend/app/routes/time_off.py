@@ -159,33 +159,42 @@ def list_requests():
 @require_admin
 def approve_request(rid):
     body = request.get_json(silent=True) or {}
+
+    # Step 1: mark approved and commit — before any Jobber calls that reuse the session
     with SessionLocal() as s:
         req = s.query(TimeOffRequest).filter_by(id=rid).first()
         if not req:
             return jsonify({"error": "not found"}), 404
         if req.status != "pending":
             return jsonify({"error": "already actioned"}), 400
-
         req.status = "approved"
         req.admin_note = body.get("admin_note") or None
-
         worker = s.query(Worker).filter_by(id=req.worker_id).first()
-        jobber_task_id = None
-        jobber_warning = None
-        if worker and worker.jobber_user_id:
-            jobber_task_id = _create_jobber_tasks(req, worker.jobber_user_id)
-            if not jobber_task_id:
-                jobber_warning = "Approved, but Jobber task(s) could not be created."
-        else:
-            jobber_warning = "Approved. Worker has no Jobber user ID — task not created."
-
-        req.jobber_task_id = jobber_task_id
+        jobber_user_id = worker.jobber_user_id if worker else None
         s.commit()
 
+    # Step 2: create Jobber tasks (opens its own sessions internally)
+    jobber_task_id = None
+    jobber_warning = None
+    if jobber_user_id:
+        with SessionLocal() as s:
+            req = s.query(TimeOffRequest).filter_by(id=rid).first()
+            jobber_task_id = _create_jobber_tasks(req, jobber_user_id)
+        if not jobber_task_id:
+            jobber_warning = "Approved, but Jobber task(s) could not be created."
+    else:
+        jobber_warning = "Approved. Worker has no Jobber user ID — task not created."
+
+    # Step 3: save task ID and return
+    with SessionLocal() as s:
+        req = s.query(TimeOffRequest).filter_by(id=rid).first()
+        req.jobber_task_id = jobber_task_id
+        s.commit()
         resp = _serialize(req)
-        if jobber_warning:
-            resp["warning"] = jobber_warning
-        return jsonify(resp)
+
+    if jobber_warning:
+        resp["warning"] = jobber_warning
+    return jsonify(resp)
 
 
 @time_off_bp.post("/api/time-off-requests/<int:rid>/deny")
