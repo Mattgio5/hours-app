@@ -11,11 +11,16 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
-      - key: RESEND_API_KEY
+      # Email — set GMAIL_APP_PASSWORD (easiest) OR RESEND_API_KEY
+      - key: GMAIL_APP_PASSWORD  # Google App Password — myaccount.google.com/apppasswords
         sync: false
-      - key: EMAIL_FROM
+      - key: GMAIL_USER          # defaults to matthewg0802@gmail.com if not set
         sync: false
-      - key: ADMIN_EMAIL
+      - key: RESEND_API_KEY      # alternative to Gmail
+        sync: false
+      - key: EMAIL_FROM          # sender address (optional, defaults to GMAIL_USER)
+        sync: false
+      - key: ADMIN_EMAIL         # who receives notifications (defaults to matthewg0802@gmail.com)
         sync: false
       - key: APP_URL        # backend public URL (used in email links)
         sync: false
