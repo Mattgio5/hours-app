@@ -6,7 +6,7 @@ from app.db import SessionLocal
 from app.models_tokens import JobberToken
 
 JOBBER_API_URL = "https://api.getjobber.com/api/graphql"
-JOBBER_GQL_VERSION = os.environ.get("JOBBER_GQL_VERSION", "2025-01-20")
+JOBBER_GQL_VERSION = os.environ.get("JOBBER_GQL_VERSION", "2026-05-12")
 TOKEN_URL = "https://api.getjobber.com/api/oauth/token"
 
 
