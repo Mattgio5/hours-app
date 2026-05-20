@@ -24,6 +24,9 @@ def _frontend_url() -> str:
 
 
 def _redirect_uri() -> str:
+    explicit = os.environ.get("JOBBER_REDIRECT_URI")
+    if explicit:
+        return explicit
     return f"{_app_url()}/auth/callback"
 
 

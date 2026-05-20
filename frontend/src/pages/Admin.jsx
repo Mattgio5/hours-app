@@ -113,7 +113,7 @@ function RequestsTab() {
                 <span style={{ margin: "0 8px", color: "#9ca3af" }}>·</span>
                 {TYPE_LABELS[r.request_type] || r.request_type}
                 <span style={{ margin: "0 8px", color: "#9ca3af" }}>·</span>
-                {r.request_date}
+                {r.request_date}{r.request_date_to && r.request_date_to !== r.request_date ? ` – ${r.request_date_to}` : ""}
                 {r.time_from && <span className="request-meta"> (not in until {r.time_from})</span>}
                 {r.time_to && <span className="request-meta"> (leaving by {r.time_to})</span>}
               </div>
@@ -275,6 +275,17 @@ function WorkersTab() {
 
 // ── Hours tab ─────────────────────────────────────────────────────────────────
 
+function toMinutes(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+function toDecimalHours(start, end) {
+  return (toMinutes(end) - toMinutes(start)) / 60;
+}
+function fmtHours(h) {
+  return h % 1 === 0 ? `${h}h` : `${h.toFixed(2)}h`;
+}
+
 function HoursTab() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -282,25 +293,68 @@ function HoursTab() {
   const [workers, setWorkers] = useState([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => { api.getWorkersFull().then(setWorkers); }, []);
 
   async function load() {
     setLoading(true);
+    setEditId(null);
+    setError("");
     try {
       const params = {};
       if (workerId) params.worker_id = workerId;
       if (dateFrom) params.from = dateFrom;
       if (dateTo) params.to = dateTo;
-      const rows = await api.getTimeEntries(params);
-      setEntries(rows);
+      setEntries(await api.getTimeEntries(params));
     } finally {
       setLoading(false);
     }
   }
 
+  function startEdit(e) {
+    setEditId(e.id);
+    setEditData({ entry_date: e.entry_date, start_time: e.start_time, end_time: e.end_time, notes: e.notes || "" });
+  }
+
+  async function saveEdit(id) {
+    setSaving(true);
+    setError("");
+    try {
+      await api.updateTimeEntry(id, editData);
+      setEditId(null);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function del(id) {
+    if (!confirm("Delete this entry?")) return;
+    try {
+      await api.deleteTimeEntry(id);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  const totalHours = entries.reduce((sum, e) => sum + toDecimalHours(e.start_time, e.end_time), 0);
+
+  const byWorker = entries.reduce((acc, e) => {
+    acc[e.worker_name] = (acc[e.worker_name] || 0) + toDecimalHours(e.start_time, e.end_time);
+    return acc;
+  }, {});
+  const multipleWorkers = Object.keys(byWorker).length > 1;
+
   return (
     <div>
+      {error && <div className="error-box">{error}</div>}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, alignItems: "end" }}>
           <div>
@@ -329,22 +383,56 @@ function HoursTab() {
       ) : entries.length === 0 ? (
         <p style={{ color: "#6b7280" }}>No entries. Use the filter above.</p>
       ) : (
-        <table className="admin-table">
-          <thead>
-            <tr><th>Worker</th><th>Date</th><th>Start</th><th>End</th><th>Notes</th></tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <tr key={e.id}>
-                <td>{e.worker_name}</td>
-                <td>{e.entry_date}</td>
-                <td>{e.start_time}</td>
-                <td>{e.end_time}</td>
-                <td style={{ color: "#6b7280", fontSize: ".85rem" }}>{e.notes || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "10px 16px", marginBottom: 12, fontSize: ".9rem" }}>
+            <strong>Total: {fmtHours(totalHours)}</strong>
+            {" "}across {entries.length} {entries.length === 1 ? "entry" : "entries"}
+            {multipleWorkers && (
+              <span style={{ color: "#6b7280", marginLeft: 12 }}>
+                ({Object.entries(byWorker).sort((a,b) => b[1]-a[1]).map(([n,h]) => `${n.split(" ")[0]}: ${fmtHours(h)}`).join(" · ")})
+              </span>
+            )}
+          </div>
+
+          <table className="admin-table">
+            <thead>
+              <tr><th>Worker</th><th>Date</th><th>Start</th><th>End</th><th>Hours</th><th>Notes</th><th></th></tr>
+            </thead>
+            <tbody>
+              {entries.map((e) => editId === e.id ? (
+                <tr key={e.id} style={{ background: "#fffbeb" }}>
+                  <td>{e.worker_name}</td>
+                  <td><input type="date" value={editData.entry_date} onChange={(ev) => setEditData(d => ({ ...d, entry_date: ev.target.value }))} style={{ marginBottom: 0, padding: "4px 8px", fontSize: ".85rem" }} /></td>
+                  <td><input type="time" value={editData.start_time} onChange={(ev) => setEditData(d => ({ ...d, start_time: ev.target.value }))} style={{ marginBottom: 0, padding: "4px 8px", fontSize: ".85rem" }} /></td>
+                  <td><input type="time" value={editData.end_time} onChange={(ev) => setEditData(d => ({ ...d, end_time: ev.target.value }))} style={{ marginBottom: 0, padding: "4px 8px", fontSize: ".85rem" }} /></td>
+                  <td style={{ color: "#6b7280" }}>{fmtHours(toDecimalHours(editData.start_time, editData.end_time))}</td>
+                  <td><input type="text" value={editData.notes} onChange={(ev) => setEditData(d => ({ ...d, notes: ev.target.value }))} style={{ marginBottom: 0, padding: "4px 8px", fontSize: ".85rem" }} /></td>
+                  <td>
+                    <div className="btn-row">
+                      <button className="btn btn-success" style={{ padding: "4px 10px", fontSize: ".8rem" }} disabled={saving} onClick={() => saveEdit(e.id)}>Save</button>
+                      <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: ".8rem" }} onClick={() => setEditId(null)}>Cancel</button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={e.id}>
+                  <td>{e.worker_name}</td>
+                  <td>{e.entry_date}</td>
+                  <td>{e.start_time}</td>
+                  <td>{e.end_time}</td>
+                  <td style={{ color: "#16a34a", fontWeight: 600 }}>{fmtHours(toDecimalHours(e.start_time, e.end_time))}</td>
+                  <td style={{ color: "#6b7280", fontSize: ".85rem" }}>{e.notes || "—"}</td>
+                  <td>
+                    <div className="btn-row">
+                      <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: ".8rem" }} onClick={() => startEdit(e)}>Edit</button>
+                      <button className="btn btn-danger" style={{ padding: "4px 10px", fontSize: ".8rem" }} onClick={() => del(e.id)}>Del</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
     </div>
   );

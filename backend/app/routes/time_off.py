@@ -29,7 +29,10 @@ _TYPE_LABELS = {
 
 def _build_task_title(req: TimeOffRequest) -> str:
     label = _TYPE_LABELS.get(req.request_type, "TIME OFF")
-    date_str = str(req.request_date)
+    if req.request_date_to and req.request_date_to != req.request_date:
+        date_str = f"{req.request_date} – {req.request_date_to}"
+    else:
+        date_str = str(req.request_date)
     title = f"{label} – {req.worker_name} – {date_str}"
     if req.request_type == "late_arrival" and req.time_from:
         title += f" (not in until {req.time_from})"
@@ -41,12 +44,13 @@ def _build_task_title(req: TimeOffRequest) -> str:
 def _create_jobber_task(req: TimeOffRequest, jobber_user_id: str) -> str | None:
     date_str = str(req.request_date)
     try:
+        end_date = str(req.request_date_to) if req.request_date_to else date_str
         result = jobber_gql(_TASK_MUTATION, {"input": {
             "title": _build_task_title(req),
             "assignedTo": [jobber_user_id],
             "allDay": True,
             "startAt": date_str + "T00:00:00Z",
-            "endAt": date_str + "T23:59:59Z",
+            "endAt": end_date + "T23:59:59Z",
             "instructions": req.notes or "",
         }})
         task = result.get("data", {}).get("taskCreate", {})
@@ -79,6 +83,7 @@ def submit_request():
             worker_name=worker.name,
             request_type=body["request_type"],
             request_date=body["request_date"],
+            request_date_to=body.get("request_date_to") or None,
             time_from=body.get("time_from") or None,
             time_to=body.get("time_to") or None,
             notes=body.get("notes") or None,
@@ -91,6 +96,7 @@ def submit_request():
             "worker_name": worker.name,
             "request_type": body["request_type"],
             "request_date": body["request_date"],
+            "request_date_to": body.get("request_date_to"),
             "time_from": body.get("time_from"),
             "time_to": body.get("time_to"),
             "notes": body.get("notes"),
@@ -173,6 +179,7 @@ def _serialize(r: TimeOffRequest) -> dict:
         "worker_name": r.worker_name,
         "request_type": r.request_type,
         "request_date": str(r.request_date),
+        "request_date_to": str(r.request_date_to) if r.request_date_to else None,
         "time_from": r.time_from,
         "time_to": r.time_to,
         "notes": r.notes,

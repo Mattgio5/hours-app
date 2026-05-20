@@ -25,6 +25,8 @@ def send_time_off_notification(req: dict) -> bool:
     rtype = _TYPE_LABELS.get(req["request_type"], req["request_type"])
     worker = req["worker_name"]
     date_str = req["request_date"]
+    if req.get("request_date_to") and req["request_date_to"] != req["request_date"]:
+        date_str = f"{req['request_date']} – {req['request_date_to']}"
 
     time_detail = ""
     if req.get("time_from"):

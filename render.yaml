@@ -25,6 +25,8 @@ services:
         sync: false
       - key: JOBBER_CLIENT_SECRET
         sync: false
+      - key: JOBBER_REDIRECT_URI  # e.g. https://hours-app-tkn2.onrender.com/auth/callback
+        sync: false
 
   - type: web
     name: hours-app

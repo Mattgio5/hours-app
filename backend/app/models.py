@@ -38,6 +38,8 @@ class TimeOffRequest(Base):
     time_from = Column(String(10), nullable=True)
     time_to = Column(String(10), nullable=True)
     notes = Column(Text, nullable=True)
+    # only set for multi-day full_day requests
+    request_date_to = Column(Date, nullable=True)
     # pending | approved | denied
     status = Column(String(20), nullable=False, default="pending")
     jobber_task_id = Column(String(100), nullable=True)
