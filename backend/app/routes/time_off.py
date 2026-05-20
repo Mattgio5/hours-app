@@ -134,21 +134,22 @@ def submit_request():
 @require_admin
 def list_requests():
     status = request.args.get("status")
-    date_filter = request.args.get("date")
+    date_from = request.args.get("date_from")
+    date_to = request.args.get("date_to")
 
     with SessionLocal() as s:
         q = s.query(TimeOffRequest)
         if status:
             q = q.filter_by(status=status)
-        if date_filter:
-            # Include single-day requests matching the date, and range requests that span it
-            q = q.filter(or_(
-                and_(TimeOffRequest.request_date_to == None,
-                     TimeOffRequest.request_date == date_filter),
-                and_(TimeOffRequest.request_date_to != None,
-                     TimeOffRequest.request_date <= date_filter,
-                     TimeOffRequest.request_date_to >= date_filter),
-            ))
+        if date_from or date_to:
+            # A request overlaps the filter window if it starts before the window ends
+            # and ends after the window starts (treat null request_date_to as same as request_date)
+            from sqlalchemy import func
+            effective_end = func.coalesce(TimeOffRequest.request_date_to, TimeOffRequest.request_date)
+            if date_from:
+                q = q.filter(effective_end >= date_from)
+            if date_to:
+                q = q.filter(TimeOffRequest.request_date <= date_to)
         rows = q.all()
         rows = sorted(rows, key=lambda r: (0 if r.status == "pending" else 1, r.request_date))
         return jsonify([_serialize(r) for r in rows])

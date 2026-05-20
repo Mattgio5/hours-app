@@ -32,10 +32,11 @@ export const api = {
   submitTimeOff: (body) => req("POST", "/api/time-off-requests", body),
 
   adminLogin: (password) => req("POST", "/api/admin/login", { password }),
-  getTimeOffRequests: ({ status, date } = {}) => {
+  getTimeOffRequests: ({ status, date_from, date_to } = {}) => {
     const p = new URLSearchParams();
     if (status) p.set("status", status);
-    if (date) p.set("date", date);
+    if (date_from) p.set("date_from", date_from);
+    if (date_to) p.set("date_to", date_to);
     const qs = p.toString();
     return adminReq("GET", `/api/time-off-requests${qs ? `?${qs}` : ""}`);
   },

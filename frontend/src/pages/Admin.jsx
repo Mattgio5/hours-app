@@ -62,7 +62,8 @@ function formatDate(str) {
 function RequestsTab() {
   const [requests, setRequests] = useState([]);
   const [filter, setFilter] = useState("pending");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionNote, setActionNote] = useState({});
   const [busy, setBusy] = useState({});
@@ -70,10 +71,10 @@ function RequestsTab() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.getTimeOffRequests({ status: filter || undefined, date: dateFilter || undefined })
+    api.getTimeOffRequests({ status: filter || undefined, date_from: dateFrom || undefined, date_to: dateTo || undefined })
       .then(setRequests)
       .finally(() => setLoading(false));
-  }, [filter, dateFilter]);
+  }, [filter, dateFrom, dateTo]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -103,18 +104,29 @@ function RequestsTab() {
             {s === "" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
           </button>
         ))}
-        <input
-          type="date"
-          value={dateFilter}
-          onChange={(e) => setDateFilter(e.target.value)}
-          title="Filter by specific date"
-          style={{ marginBottom: 0, padding: "6px 10px", fontSize: ".85rem", width: "auto" }}
-        />
-        {dateFilter && (
-          <button className="btn btn-secondary" style={{ padding: "6px 10px", fontSize: ".85rem" }} onClick={() => setDateFilter("")}>
-            Clear date
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginLeft: 4 }}>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            title="From date"
+            style={{ marginBottom: 0, padding: "6px 10px", fontSize: ".85rem", width: "auto" }}
+          />
+          <span style={{ color: "#9ca3af", fontSize: ".85rem" }}>–</span>
+          <input
+            type="date"
+            value={dateTo}
+            min={dateFrom}
+            onChange={(e) => setDateTo(e.target.value)}
+            title="To date"
+            style={{ marginBottom: 0, padding: "6px 10px", fontSize: ".85rem", width: "auto" }}
+          />
+          {(dateFrom || dateTo) && (
+            <button className="btn btn-secondary" style={{ padding: "6px 10px", fontSize: ".85rem" }} onClick={() => { setDateFrom(""); setDateTo(""); }}>
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {msg && <div className="error-box" style={{ marginBottom: 12 }}>{msg}</div>}
