@@ -159,6 +159,20 @@ function RequestsTab() {
             )}
             <p className="request-meta" style={{ color: "#9ca3af", marginTop: 4 }}>Submitted {formatDate(r.created_at)}</p>
 
+            {r.status !== "pending" && (
+              <button
+                className="btn btn-danger"
+                style={{ marginTop: 8, padding: "4px 12px", fontSize: ".8rem" }}
+                onClick={async () => {
+                  if (!confirm("Delete this request?")) return;
+                  try { await api.deleteTimeOffRequest(r.id); load(); }
+                  catch (err) { setMsg(err.message); }
+                }}
+              >
+                Delete
+              </button>
+            )}
+
             {r.status === "pending" && (
               <div style={{ marginTop: 10 }}>
                 <input

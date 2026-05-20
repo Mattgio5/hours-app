@@ -197,6 +197,18 @@ def approve_request(rid):
     return jsonify(resp)
 
 
+@time_off_bp.delete("/api/time-off-requests/<int:rid>")
+@require_admin
+def delete_request(rid):
+    with SessionLocal() as s:
+        req = s.query(TimeOffRequest).filter_by(id=rid).first()
+        if not req:
+            return jsonify({"error": "not found"}), 404
+        s.delete(req)
+        s.commit()
+        return jsonify({"ok": True})
+
+
 @time_off_bp.post("/api/time-off-requests/<int:rid>/deny")
 @require_admin
 def deny_request(rid):
