@@ -42,21 +42,26 @@ def _build_task_title(req: TimeOffRequest, for_date: date_type | None = None) ->
 
 def _create_single_task(req: TimeOffRequest, jobber_user_id: str, for_date: date_type) -> str | None:
     date_str = str(for_date)
+    title = _build_task_title(req, for_date)
+    log.info("Creating Jobber task: %r for %s (user %s)", title, date_str, jobber_user_id)
     try:
         result = jobber_gql(_TASK_MUTATION, {"input": {
-            "title": _build_task_title(req, for_date),
+            "title": title,
             "assignedTo": [jobber_user_id],
             "allDay": True,
             "startAt": date_str + "T12:00:00Z",
             "endAt": date_str + "T12:00:00Z",
             "instructions": req.notes or "",
         }})
+        log.info("Jobber task response for %s: %s", date_str, result)
         task = result.get("data", {}).get("taskCreate", {})
         errors = task.get("userErrors") or []
         if errors:
             log.warning("Jobber task errors for request %d on %s: %s", req.id, date_str, errors)
             return None
-        return (task.get("task") or {}).get("id")
+        task_id = (task.get("task") or {}).get("id")
+        log.info("Jobber task created for %s: id=%s", date_str, task_id)
+        return task_id
     except Exception as exc:
         log.exception("Failed to create Jobber task for request %d on %s: %s", req.id, date_str, exc)
         return None
