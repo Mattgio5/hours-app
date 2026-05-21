@@ -12,12 +12,12 @@ payroll_bp = Blueprint("payroll", __name__)
 CREW_LEAD_NAMES = {"connor keiser", "niko", "tyler", "klay", "szymon"}
 
 _VISITS_QUERY = """
-query PayrollVisits($start: String!, $end: String!, $after: String) {
-  visits(filter: { startAt: { gte: $start, lte: $end } }, first: 100, after: $after) {
+query PayrollVisits($after: String, $start: ISO8601DateTime!, $end: ISO8601DateTime!) {
+  visits(filter: { startAt: { after: $start, before: $end } }, first: 100, after: $after) {
     nodes {
       id
       startAt
-      assignedTo {
+      assignedUsers {
         nodes {
           id
           name { full }
@@ -98,7 +98,7 @@ def payroll_review():
     crew_assignment: dict[str, dict[int, int]] = defaultdict(dict)
     for visit in jobber_visits:
         visit_date = _visit_date(visit["startAt"])
-        assigned_nodes = visit.get("assignedTo", {}).get("nodes", [])
+        assigned_nodes = visit.get("assignedUsers", {}).get("nodes", [])
 
         on_visit = [worker_by_jobber_id[n["id"]] for n in assigned_nodes if n["id"] in worker_by_jobber_id]
         leads = [w for w in on_visit if w.id in crew_lead_ids]
