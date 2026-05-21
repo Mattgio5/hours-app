@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from collections import defaultdict
+from datetime import date as date_type
 
 from app.db import SessionLocal
 from app.models import TimeEntry, Worker
@@ -65,11 +66,17 @@ def payroll_review():
     if not date_from or not date_to:
         return jsonify({"error": "from and to are required"}), 400
 
+    try:
+        df = date_type.fromisoformat(date_from)
+        dt = date_type.fromisoformat(date_to)
+    except ValueError:
+        return jsonify({"error": "invalid date format"}), 400
+
     with SessionLocal() as s:
         workers = s.query(Worker).all()
         entries = (
             s.query(TimeEntry)
-            .filter(TimeEntry.entry_date >= date_from, TimeEntry.entry_date <= date_to)
+            .filter(TimeEntry.entry_date >= df, TimeEntry.entry_date <= dt)
             .order_by(TimeEntry.entry_date, TimeEntry.worker_name)
             .all()
         )
