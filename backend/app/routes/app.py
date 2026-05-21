@@ -7,6 +7,7 @@ from app.routes.auth_jobber import auth_jobber_bp
 from app.routes.workers import workers_bp
 from app.routes.time_entries import time_entries_bp
 from app.routes.time_off import time_off_bp
+from app.routes.payroll import payroll_bp
 
 import app.models  # ensure models are registered with Base
 
@@ -20,6 +21,7 @@ def create_app() -> Flask:
     flask_app.register_blueprint(workers_bp)
     flask_app.register_blueprint(time_entries_bp)
     flask_app.register_blueprint(time_off_bp)
+    flask_app.register_blueprint(payroll_bp)
 
     return flask_app
 

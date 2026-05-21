@@ -503,6 +503,123 @@ function HoursTab() {
   );
 }
 
+// ── Payroll tab ───────────────────────────────────────────────────────────────
+
+function getLastWeekRange() {
+  const today = new Date();
+  const dow = today.getDay(); // 0=Sun
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((dow + 6) % 7) - 7);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return { from: fmt(monday), to: fmt(sunday) };
+}
+
+function PayrollTab() {
+  const lw = getLastWeekRange();
+  const [dateFrom, setDateFrom] = useState(lw.from);
+  const [dateTo, setDateTo] = useState(lw.to);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  async function run() {
+    setLoading(true);
+    setError("");
+    setResult(null);
+    try {
+      setResult(await api.getPayrollReview({ from: dateFrom, to: dateTo }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const reviewed = result ? result.flags.length + result.clean.length : 0;
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, alignItems: "end" }}>
+          <div>
+            <label>From</label>
+            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ marginBottom: 0 }} />
+          </div>
+          <div>
+            <label>To</label>
+            <input type="date" value={dateTo} min={dateFrom} onChange={(e) => setDateTo(e.target.value)} style={{ marginBottom: 0 }} />
+          </div>
+        </div>
+        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={run} disabled={loading}>
+          {loading ? "Analyzing…" : "Run Payroll Review"}
+        </button>
+      </div>
+
+      {error && <div className="error-box">{error}</div>}
+
+      {result && (
+        <>
+          <div style={{
+            background: result.flags.length ? "#fef2f2" : "#f0fdf4",
+            border: `1px solid ${result.flags.length ? "#fecaca" : "#bbf7d0"}`,
+            borderRadius: 8,
+            padding: "10px 16px",
+            marginBottom: 16,
+            fontSize: ".9rem",
+          }}>
+            {result.flags.length === 0
+              ? <span>No flags — all <strong>{reviewed}</strong> reviewed entries look good.</span>
+              : <span><strong style={{ color: "#dc2626" }}>{result.flags.length} flagged</strong> of <strong>{reviewed}</strong> reviewed entries</span>
+            }
+            {result.total_entries > reviewed && (
+              <span style={{ color: "#9ca3af", marginLeft: 10 }}>
+                ({result.total_entries - reviewed} entries skipped — no crew lead assignment found)
+              </span>
+            )}
+          </div>
+
+          {result.flags.length > 0 && (
+            <table className="admin-table" style={{ marginBottom: 8 }}>
+              <thead>
+                <tr>
+                  <th>Worker</th>
+                  <th>Date</th>
+                  <th>In</th>
+                  <th>Out</th>
+                  <th>Lead</th>
+                  <th>Lead In</th>
+                  <th>Lead Out</th>
+                  <th>Issue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.flags.map((f, i) => {
+                  const earlyIn = f.start_time < f.lead_start_time;
+                  const lateOut = f.end_time > f.lead_end_time;
+                  return (
+                    <tr key={i} style={{ background: "#fff5f5" }}>
+                      <td>{f.worker_name}</td>
+                      <td>{f.entry_date}</td>
+                      <td style={{ color: earlyIn ? "#dc2626" : undefined, fontWeight: earlyIn ? 700 : undefined }}>{f.start_time}</td>
+                      <td style={{ color: lateOut ? "#dc2626" : undefined, fontWeight: lateOut ? 700 : undefined }}>{f.end_time}</td>
+                      <td style={{ color: "#6b7280", fontSize: ".85rem" }}>{f.crew_lead_name}</td>
+                      <td>{f.lead_start_time}</td>
+                      <td>{f.lead_end_time}</td>
+                      <td style={{ color: "#dc2626", fontSize: ".8rem" }}>{f.issues.join(", ")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Jobber tab ────────────────────────────────────────────────────────────────
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -609,7 +726,7 @@ export default function Admin() {
       </div>
 
       <div className="tabs">
-        {["requests", "workers", "hours", "jobber"].map((t) => (
+        {["requests", "workers", "hours", "payroll", "jobber"].map((t) => (
           <button key={t} className={`tab${tab === t ? " active" : ""}`} onClick={() => setTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
@@ -619,6 +736,7 @@ export default function Admin() {
       {tab === "requests" && <RequestsTab />}
       {tab === "workers" && <WorkersTab />}
       {tab === "hours" && <HoursTab />}
+      {tab === "payroll" && <PayrollTab />}
       {tab === "jobber" && <JobberTab />}
     </div>
   );

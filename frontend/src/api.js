@@ -58,4 +58,6 @@ export const api = {
   createWorker: (body) => adminReq("POST", "/api/workers", body),
   updateWorker: (id, body) => adminReq("PUT", `/api/workers/${id}`, body),
   deleteWorker: (id) => adminReq("DELETE", `/api/workers/${id}`),
+  getPayrollReview: ({ from: f, to: t }) =>
+    adminReq("GET", `/api/payroll-review?from=${f}&to=${t}`),
 };
