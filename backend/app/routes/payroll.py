@@ -39,13 +39,14 @@ def _is_crew_lead(name: str) -> bool:
     return first in CREW_LEAD_NAMES
 
 
-def _gql_with_retry(query, variables, max_attempts=3):
+def _gql_with_retry(query, variables, max_attempts=4):
+    delays = [5, 10, 20]
     for attempt in range(max_attempts):
         try:
             return jobber_gql(query, variables)
         except RuntimeError as exc:
             if "THROTTLED" in str(exc) and attempt < max_attempts - 1:
-                time.sleep(2 ** attempt)
+                time.sleep(delays[attempt])
             else:
                 raise
 
@@ -62,7 +63,7 @@ def _fetch_visits(date_from: str, date_to: str) -> list:
         if not page["pageInfo"]["hasNextPage"]:
             break
         cursor = page["pageInfo"]["endCursor"]
-        time.sleep(0.5)
+        time.sleep(2)
     return visits
 
 
