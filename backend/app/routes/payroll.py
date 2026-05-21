@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from collections import defaultdict
 from datetime import date as date_type
+import time
 
 from app.db import SessionLocal
 from app.models import TimeEntry, Worker
@@ -12,8 +13,8 @@ payroll_bp = Blueprint("payroll", __name__)
 CREW_LEAD_NAMES = {"connor keiser", "niko", "tyler", "klay", "szymon"}
 
 _VISITS_QUERY = """
-query PayrollVisits($after: String, $start: ISO8601DateTime!, $end: ISO8601DateTime!) {
-  visits(filter: { startAt: { after: $start, before: $end } }, first: 100, after: $after) {
+query PayrollVisits($cursor: String, $start: ISO8601DateTime!, $end: ISO8601DateTime!) {
+  visits(filter: { startAt: { after: $start, before: $end } }, first: 50, after: $cursor) {
     nodes {
       id
       startAt
@@ -38,18 +39,30 @@ def _is_crew_lead(name: str) -> bool:
     return first in CREW_LEAD_NAMES
 
 
+def _gql_with_retry(query, variables, max_attempts=3):
+    for attempt in range(max_attempts):
+        try:
+            return jobber_gql(query, variables)
+        except RuntimeError as exc:
+            if "THROTTLED" in str(exc) and attempt < max_attempts - 1:
+                time.sleep(2 ** attempt)
+            else:
+                raise
+
+
 def _fetch_visits(date_from: str, date_to: str) -> list:
     start = f"{date_from}T00:00:00-04:00"
     end = f"{date_to}T23:59:59-04:00"
     visits = []
     cursor = None
     while True:
-        res = jobber_gql(_VISITS_QUERY, {"start": start, "end": end, "after": cursor})
+        res = _gql_with_retry(_VISITS_QUERY, {"start": start, "end": end, "cursor": cursor})
         page = res["data"]["visits"]
         visits.extend(page["nodes"])
         if not page["pageInfo"]["hasNextPage"]:
             break
         cursor = page["pageInfo"]["endCursor"]
+        time.sleep(0.5)
     return visits
 
 
