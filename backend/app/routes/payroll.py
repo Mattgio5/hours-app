@@ -16,13 +16,9 @@ _VISITS_QUERY = """
 query PayrollVisits($cursor: String, $start: ISO8601DateTime!, $end: ISO8601DateTime!) {
   visits(filter: { startAt: { after: $start, before: $end } }, first: 50, after: $cursor) {
     nodes {
-      id
       startAt
       assignedUsers {
-        nodes {
-          id
-          name { full }
-        }
+        nodes { id }
       }
     }
     pageInfo { hasNextPage endCursor }
